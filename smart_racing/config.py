@@ -3,6 +3,12 @@
 # --- 4.1 circuit structure -------------------------------------------------
 MIN_CHECKPOINTS = 10
 MIN_SHORTCUTS = 2
+MIN_FUEL_STATIONS = 2
+MIN_NITRO_PICKUPS = 2
+MIN_ONE_WAY_ROADS = 1
+MIN_DIFFICULTY_LEVELS = 3      # "several difficulty levels" (docs/RULES.md)
+MIN_START_FINISH_ROUTES = 2    # distinct simple Start->Finish paths (docs/RULES.md)
+BUILTIN_CIRCUITS = ("harbor_eight", "grand_ring", "serpent_pass")   # championship order
 LAPS_PER_RACE = 2
 RACE_TIME_LIMIT = 900.0        # simulated seconds
 
@@ -95,3 +101,22 @@ ALT_PATH_MAX_EDGES = 40        # max edges in an enumerated path
 
 # --- backtracking placement (docs/RULES.md) ---------------------------------
 BACKTRACK_NODE_LIMIT = 200_000 # candidates tried before the solver gives up
+
+# --- track generator (Project.md 5.4, docs/RULES.md) -------------------------
+GEN_COLS, GEN_ROWS = 7, 4      # jittered lattice of vertices
+GEN_MAP_SIZE = (1000.0, 700.0)
+GEN_MARGIN = 70.0
+GEN_JITTER = 0.22              # fraction of a cell; below 0.25 keeps roads from crossing
+GEN_EXTRA_FRACTION = 0.6       # share of non-tree candidate roads added after the MST
+GEN_MAX_DEGREE = 5             # no vertex gets more roads than this
+GEN_LOOP_LENGTHS = (20, 18, 16)  # main-loop sizes tried, in this order
+GEN_STATION_MIN_GAP = 5        # loop positions between fuel stations (cyclic)
+GEN_SHORTCUT_MAX_SKIP = 3      # loop vertices a generated shortcut may cut off
+GEN_NITRO_MIN_HOPS = 2         # roads between two nitro pickups
+GEN_SPEED = {1: 40.0, 2: 36.0, 3: 32.0, 4: 28.0, 5: 24.0}   # distance units per second by difficulty
+GEN_SHORTCUT_SPEED = 48.0      # shortcuts are fast,
+GEN_SHORTCUT_DIFFICULTY = 4    # hard
+GEN_SHORTCUT_THIRST = 2.0      # and cost this many times the normal fuel
+GEN_LOOP_NODE_LIMIT = 40_000   # backtracking candidates per main-loop search
+GEN_FUEL_RATE = (0.012, 0.031) # fuel per distance unit, drawn per attempt
+GEN_MAX_ATTEMPTS = 20          # candidates tried before the generator gives up
