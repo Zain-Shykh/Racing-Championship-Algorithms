@@ -9,7 +9,7 @@ phase is committed and pushed to `origin/main`.
 | Phase | Title | Depends on | Status |
 |---|---|---|---|
 | 0 | Project setup and planning | - | done |
-| 1 | Core model, heap and graph algorithms | 0 | pending |
+| 1 | Core model, heap and graph algorithms | 0 | done |
 | 2 | Resource, MST, backtracking and sorting algorithms | 1 | pending |
 | 3 | Tracks, validator, generator and event system | 2 | pending |
 | 4 | Race engine, opponents and championship | 3 | pending |
