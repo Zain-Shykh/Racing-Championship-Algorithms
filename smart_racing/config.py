@@ -92,3 +92,6 @@ SIM_DT = 0.05
 # --- Act 1 alternative-route panel (docs/RULES.md) --------------------------
 ALT_ROUTE_LIMIT = 10           # max simple paths enumerated
 ALT_PATH_MAX_EDGES = 40        # max edges in an enumerated path
+
+# --- backtracking placement (docs/RULES.md) ---------------------------------
+BACKTRACK_NODE_LIMIT = 200_000 # candidates tried before the solver gives up
