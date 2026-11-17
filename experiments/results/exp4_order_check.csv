@@ -1,0 +1,10 @@
+pop_position,trigger_time,priority,insertion_sequence,type,target
+1,3.0,1,8,road_block,9
+2,7.0,1,5,road_block,2
+3,7.0,1,6,road_block,6
+4,7.0,2,4,shortcut_close,1
+5,7.0,3,3,oil_spill,4
+6,7.0,3,7,oil_spill,7
+7,7.0,4,2,speed_restriction,3
+8,7.0,5,1,station_outage,8
+9,7.0,6,0,nitro_spawn,5

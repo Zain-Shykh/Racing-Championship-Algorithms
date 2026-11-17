@@ -1,0 +1,18 @@
+{
+  "recorded_at": "2026-11-17T14:18:47",
+  "os": "Linux-7.0.0-43-generic-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "cpu": "12th Gen Intel(R) Core(TM) i3-1215U",
+  "logical_cpus": 8,
+  "ram_gb": 15.3,
+  "python": "3.12.3",
+  "implementation": "CPython",
+  "matplotlib": "3.11.2",
+  "timer": "time.perf_counter",
+  "gc": "collected once before each configuration, disabled during each timed call",
+  "warmup_runs": 1,
+  "timed_runs": 5,
+  "seed": 2026,
+  "quick": false,
+  "process": "single process, single thread, experiments run one after another"
+}
