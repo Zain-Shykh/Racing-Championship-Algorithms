@@ -12,7 +12,7 @@ phase is committed and pushed to `origin/main`.
 | 1 | Core model, heap and graph algorithms | 0 | done |
 | 2 | Resource, MST, backtracking and sorting algorithms | 1 | done |
 | 3 | Tracks, validator, generator and event system | 2 | done |
-| 4 | Race engine, opponents and championship | 3 | pending |
+| 4 | Race engine, opponents and championship | 3 | done |
 | 5 | GUI part 1: app shell, menu, explorer, racing screen | 4 | pending |
 | 6 | GUI part 2: algorithm lab, dashboard, generator view | 5 | pending |
 | 7 | Five experimental studies | 4 | pending |

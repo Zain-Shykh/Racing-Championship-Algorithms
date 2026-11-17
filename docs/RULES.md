@@ -110,6 +110,9 @@ Decisions that `Project.md` and `docs/SPEC.md` leave open. One entry per decisio
   (A* heuristic). Normal speed by difficulty 1..5 is 40/36/32/28/24 distance
   units per second. Shortcuts are short, fast (48), hard (difficulty 4 or 5)
   and thirsty, so Speed takes them while Economy and Safety do not.
+  Serpent Pass is the longest circuit, so in Phase 4 all its base times were
+  multiplied by 0.75 (speeds 53/48/43/37/32, shortcuts 64) and its event times
+  by the same factor, to keep a two-lap race under four minutes.
 - **Fuel tuning.** Least-fuel two-lap race: Harbor Eight about 96 units (no
   stop needed, but only just), Grand Ring about 130 (one stop), Serpent Pass
   about 151 (two stops). Fuel stations sit on the main route.
@@ -229,3 +232,214 @@ Decisions that `Project.md` and `docs/SPEC.md` leave open. One entry per decisio
 - **Batching.** `pop_due(now)` applies everything due in heap order, including
   expiries created during the call that are already due, and returns the
   applied records; the engine re-plans once after the call.
+
+## Phase 4: the frozen rules as implemented
+
+The numbers are in `config.py`; SPEC section 4 is the summary. This section
+adds every decision the engine had to make. Code: `smart_racing/engine/`.
+
+### Simulation (`race.py`)
+- **Tick.** `SIM_DT = 0.05` s, clock = tick count x `SIM_DT`. One tick:
+  (1) apply every event with `trigger_time <= clock` in heap order
+  (`EventQueue.pop_due`); (2) one re-plan pass; (3) move every racer through
+  the tick in racer-id order. `update(dt)` adds frame time to an accumulator
+  and runs whole ticks; `run_to_completion()` ticks until the race is over.
+  Both give identical results.
+- **Exact times inside a tick.** A racer spends its 0.05 s piece by piece:
+  finishing a road, a fuel stop and the next road each use their true share,
+  so arrival, lap and finish times are exact and do not depend on tick size.
+- **Movement.** On a road the progress fraction grows by
+  `dt x nitro multiplier / effective_time`, with the road's *current*
+  effective time, so an oil spill or speed restriction slows a car already on
+  the road. A car on a road that gets blocked finishes that road.
+- **Fuel.** A road may be entered only with fuel >= its effective fuel. That
+  price is fixed at entry; an oil spill starting later does not raise it for
+  a car already on the road, so no car can strand between two vertices.
+  Fuel drains in proportion to progress, doubled while nitro is active.
+- **Nitro.** One activation = 4 s at 1.5x speed and 2x fuel use. The 4 s run
+  in race time (also during a stop). The player may fire whenever the car is
+  racing, has a charge and no boost running. **Cut-out:** if the next piece of
+  boosted driving would leave less fuel than the rest of the current road
+  needs at the normal rate, the boost ends at once. The charge is spent.
+- **Pickups.** Arriving at an active nitro pickup with fewer than 3 charges
+  gives +1 charge through `EventQueue.collect_nitro` (pickup off, respawn
+  after 25 s). With 3 charges the pickup is left alone. Two cars arriving in
+  the same tick: the lower id is served first.
+- **Fuel stations.** A stop buys 1..40 units, capped by tank room, takes 3 s,
+  and the fuel is in the tank at the start of the stop. A racer may make
+  several stops in a row at the same station; each is a separate 3 s stop of
+  at most 40 units. The refuel DP models one purchase per visit, so its plans
+  stay valid.
+- **Checkpoints and laps.** Arriving at the checkpoint whose order equals
+  `next_checkpoint` advances it. Arriving at any other checkpoint counts
+  nothing. Arriving at Finish with all checkpoints done completes the lap;
+  arriving at Finish early counts nothing. The race ends for a racer when it
+  completes `laps` laps.
+- **End of race.** When every racer is finished or DNF, or when the clock
+  reaches `RACE_TIME_LIMIT` (900 s). Racers still running then keep status
+  `racing`, have no finish time, and `end_time` = the limit.
+- **Statuses:** `racing`, `waiting`, `refuelling`, `finished`, `dnf`.
+
+### Re-planning
+- After an event batch every active racer is re-planned once if (a) a road on
+  its remaining route was blocked or re-costed, or (b) the batch reopened or
+  restored any road (road clear, shortcut open, an oil/speed expiry), because
+  a better route may now exist. A waiting racer tries again after every batch.
+- A racer on a road is planned from the vertex it is driving to, with the
+  checkpoint progress it will have there.
+- At a vertex, a racer whose next road is no longer drivable re-plans first.
+- A racer whose route is empty (after a manual move or a station detour)
+  re-plans from its real progress, so no state can leave it without a route.
+- `reroutes` counts changes of a non-empty route, including fuel detours.
+
+### Recovery policy (identical for every racer, SPEC 4.6)
+1. **Blocked next road or no route:** re-plan from the current vertex with the
+   racer's own strategy.
+2. **Still no drivable route:** wait at the vertex (`waiting`, reason
+   "no open route") and try again after each event batch.
+3. **Fuel.** Checked at every vertex before leaving. If the fuel cannot cover
+   the next road, or it cannot cover the route to the next active station on
+   it (the end of the race when there is none) *and* after the next road no
+   station at all would be reachable, the racer leaves its route for the
+   nearest reachable active station (least fuel to reach, Dijkstra on fuel;
+   ties by lower id) and re-plans from there. A station that is out of
+   service counts as reachable in the look-ahead, because outages are
+   temporary. If no open station is reachable the racer drives to the nearest
+   closed one, or stays if it is standing on one, and waits ("fuel station
+   closed"); with no station in reach at all it waits where it is ("out of
+   fuel").
+4. **DNF** after 60 s of continuous waiting, or immediately when the racer
+   must wait and the event queue holds no pending event (nothing can change).
+   The wait counter restarts when the racer moves or refuels.
+- **How time is counted.** Waiting and fuel stops are race time: the clock
+  never stops for a racer. A DNF racer's elapsed time is the moment it was
+  ruled out (`end_time`); it ranks by laps, checkpoints, that time, id.
+- The policy cannot hang: a wait ends in a move, a DNF after at most 60 s, or
+  the time limit.
+
+### Player control (no pygame; SPEC 4.8)
+- `set_autopilot`, `choose_edge`, `fire_nitro`, `refuel`; queries
+  `legal_choices` (open, correctly directed, affordable roads, with the
+  recommended one flagged) and `station_offer` (most units, recommended units).
+- `choose_edge` is accepted only for a legal road. It may be given while still
+  driving, for the vertex ahead, and is checked again on arrival. A chosen
+  road overrides the recommended route once, also with autopilot on.
+- **Autopilot on:** the player's car follows the recommended route (A* under
+  the selected preset, plus knapsack pickups), buys what the refuel DP says
+  and uses the automatic nitro rule. A race needs no input.
+- **Autopilot off, no input:** at a vertex with more than one legal road, or
+  at an active station, the car stands for `PLAYER_CHOICE_GRACE = 3 s`; then
+  the recommended purchase and the recommended road are taken. At a vertex
+  with a single legal road the car drives on without stopping. So an idle
+  manual player still finishes, only slower. The grace is not "waiting": it
+  never counts towards DNF. A player who picks a road explicitly gets no
+  automatic purchase at that vertex and no automatic nitro.
+
+### Opponents (`opponents.py`, Project.md 4.4)
+All three are deterministic and obey the rules and recovery policy above.
+- **Opponent 1, `fixed`.** Drives `main_route`; later laps go Finish ->
+  checkpoint 1 by the shortest-distance road (Finish -> Start) and repeat it.
+  Blocked road: if a road of the stretch that `detour` bypasses is blocked
+  and every detour road is open, the detour replaces that stretch. Any other
+  blockage: drive up to it and wait (recovery rule 2).
+- **Opponent 2, `shortcut`.** The same lap with every designated shortcut
+  (`opponent_shortcuts`) that is open put in place of the stretch it cuts
+  off. A closed shortcut means the main-route stretch is used again; the
+  choice is remade whenever the track changes. For other blockages it has
+  Opponent 1's detour.
+- **Opponent 3, `shortest`.** Checkpoint-aware Dijkstra on distance for the
+  rest of the race; recomputed after every relevant event.
+- **Off the lap** (after a fuel detour, or when a detour ends under it):
+  Opponents 1 and 2 take the shortest-distance path to their next mandatory
+  vertex and continue on their lap from there.
+- **Refuelling (all three).** At an active station on the route an opponent
+  fills up (min(40, whole units of tank room)) when the station is
+  *eligible*: fuel below 25% of the tank, or fuel below what the route needs
+  to the next active station (or the end) plus `REFUEL_SAFETY_MARGIN = 2`.
+  The second condition was added because the bare 25% rule strands cars on
+  the built-in circuits. Opponent 3's "nearest reachable station" is the
+  first station on its route; when its route has none in range, recovery
+  rule 3 sends it (like everyone) to the nearest reachable one.
+- **Nitro (all automatic racers, autopilot included).** On entering a road,
+  fire if a charge is held, no boost is running, the road has no oil or speed
+  restriction, lasts at least 4 s, its effective difficulty is at most the
+  racer's limit (`NITRO_AUTO_MAX_DIFFICULTY`: fixed 2, shortcut 3,
+  shortest 1, autopilot 2), and fuel >= fuel to the next active station on
+  the route (or its end) + the worst extra the boost can burn + the margin.
+- **More racers.** `default_racers(n)` gives the player plus n opponents
+  (n <= 9), strategies repeating fixed, shortcut, shortest. Racer ids are
+  list positions; the player is 0.
+
+### Routing (`routing.py`)
+- One search per leg; a leg with no route gives `found=False` and names the
+  target. The player's line uses A*, Opponent 3 Dijkstra. `RoutePlan` carries
+  distance, time, fuel, the exact scalar cost and the summed search counters.
+- A plan covers the whole rest of the race (all remaining laps).
+
+### Resource planner (`resources.py`, Project.md 5.3)
+- **Knapsack items** = optional service vertices for a given route and racer:
+  active nitro pickups while a charge slot is free, and active fuel stations
+  that are not on the route when the refuel DP finds no plan for the route.
+- **Cost c_i** (integer) = extra travel time of the cheapest out-and-back
+  loop from a route vertex to the pickup and back to the same vertex
+  (two Dijkstra searches on effective time), in tenths of a second, rounded
+  up (`PICKUP_COST_SCALE = 10`). A pickup on the route costs 0.
+- **Budget B** = detour time the racer accepts for one plan, default
+  `PICKUP_DETOUR_BUDGET = 6 s` -> 60. Only time is in the budget.
+- **Benefit v_i**: nitro pickup = 20 (`PICKUP_NITRO_BENEFIT`: the 2.0 s one
+  activation saves, in tenths); fuel station = min(40, fuel the route needs
+  beyond the tank), in units.
+- **Nitro capacity** is a second constraint, handled before the knapsack: only
+  the cheapest (3 - charges) nitro items are offered. They all have the same
+  benefit, so nothing better is lost.
+- **Fuel** is a third resource and is not converted into the budget. The
+  chosen loops are spliced into the route and the refuel DP runs on the
+  result; while it is infeasible the thirstiest loop is dropped (nitro loops
+  before stations). `PickupPlan.feasible` is the DP verdict for the returned
+  route, so a recommendation never breaks tank or station rules.
+- Never offered: an inactive pickup, a pickup with no path out and back, the
+  current vertex.
+- **DP and greedy** are both solved and returned. The player's autopilot
+  applies the DP selection (`pickup_solver="dp"`, default) or the greedy one
+  (`"greedy"`), or none (`None`).
+- **Refuel plan.** Stops = the current vertex (fuel on sale only if it is an
+  active station) and each later visit to an active station on the route.
+  The autopilot runs the DP with 2 units held back and buys its first
+  purchase; if the DP finds no plan it fills up.
+
+### Scoring and championship (`championship.py`)
+- Classification: finishers by time then id; the rest by laps, checkpoints of
+  the current lap, elapsed time, id (merge sort with one comparator).
+- **Live order** uses the same comparator, with "planned time to the next
+  mandatory vertex" in place of elapsed time for cars still running, and a
+  DNF car behind a running car on equal laps and checkpoints.
+  `live_top_k(k)` gets the leaders from the size-k heap.
+- Points 25..1 to finishers only. **Fastest-lap bonus:** +1 to the finisher
+  with the lowest lap time among finishers (ties: lower id); a lap set by a
+  racer who did not finish earns nothing.
+- A win is a first place with a finish time. `sum_of_finish_positions` uses
+  the classification position, finished or not.
+- Standings: merge sort by default, quick and heap sort on request, all with
+  `championship_less`; `Championship.top(k)` uses the size-k heap. The
+  champion is the leader after the last race.
+- `create_race` loads a built-in circuit fresh for each race because events
+  change the graph.
+
+## Algorithm integration map
+
+Every gameplay call goes to the one implementation in `smart_racing/algorithms/`.
+
+| # | Algorithm | Function | Gameplay call sites |
+|---|---|---|---|
+| 1 | BFS | `bfs.bfs` | `tracks/validator.validate`: ordered checkpoint and lap-return reachability of every circuit that is loaded or generated; `tracks/generator`: hop bounds for loop-closure pruning. Track Explorer reachability (Phase 5). |
+| 2 | DFS | `dfs.dfs`, `find_cycle`, `connected_components`, `dead_ends`, `enumerate_paths` | `validator.validate`: cycle, dead end and two Start-Finish routes; `generator`: candidate-graph connectivity and the critical-bridge pruning rule. Explorer alternative routes (Phase 5). |
+| 3 | Dijkstra | `dijkstra.dijkstra` | `engine/routing.plan_through` for Opponent 3 (`opponents.ShortestDistance.plan`, distance cost); `routing.nearest_station` (recovery rule 3, fuel cost); `opponents.FixedRoute.plan` (rejoining the lap); `resources.pickup_plan` (detour loops, time cost); `validator.checkpoint_route` (fuel rule). |
+| 4 | A* | `astar.astar` | `routing.plan_through` for the player's recommended line (`opponents.Autopilot.plan`), at race start and at every re-plan in `race.RaceEngine._replan`; `routing.compare_presets` for the route comparison. |
+| 5 | Dynamic programming | `knapsack.knapsack_dp`, `refuel.plan_refuel` | `resources.pickup_plan` (pickups added to the autopilot route); `resources.refuel_plan`, called by `Autopilot.refuel_amount` at every station and by `pickup_plan` as the fuel check; `validator.fuel_plan`. |
+| 6 | Greedy | `knapsack.knapsack_greedy` | `resources.pickup_plan`: returned beside the DP for the recommendation panel and applied to the autopilot route when the race is created with `pickup_solver="greedy"`. |
+| 7 | Backtracking | `backtracking.solve` | `tracks/generator`: main-loop search and placement of shortcuts, stations, checkpoints, pickups and obstacle sites for generated circuits. |
+| 8 | Kruskal (MST) | `mst.kruskal` | `tracks/generator`: road backbone of a generated circuit. |
+| 9 | Heap / priority queue | `heap.MinHeap` | `engine/events.EventQueue` (every race event, popped by `RaceEngine.step`); frontier of Dijkstra and A*; `topk.top_k` in `RaceEngine.live_top_k` (running order) and `Championship.top` (standings). |
+| 10 | Merge sort | `sorting.merge_sort` | `Championship.standings` (default); `RaceEngine.running_order` / `classification` (race positions and final result); edge order in Kruskal; item order in greedy knapsack. |
+| 11 | Quick sort | `sorting.quick_sort` | `Championship.standings("quick")`, selectable on the dashboard. |
+| 12 | Heap sort | `sorting.heap_sort` | `Championship.standings("heap")`, selectable on the dashboard. |

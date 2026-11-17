@@ -120,3 +120,13 @@ GEN_SHORTCUT_THIRST = 2.0      # and cost this many times the normal fuel
 GEN_LOOP_NODE_LIMIT = 40_000   # backtracking candidates per main-loop search
 GEN_FUEL_RATE = (0.012, 0.031) # fuel per distance unit, drawn per attempt
 GEN_MAX_ATTEMPTS = 20          # candidates tried before the generator gives up
+
+# --- Phase 4: race engine (docs/RULES.md "Phase 4") --------------------------
+PLAYER_CHOICE_GRACE = 3.0      # s a manual player may sit at a junction before the recommended move is taken
+REFUEL_SAFETY_MARGIN = 2.0     # fuel units kept in hand by automatic refuel and nitro decisions
+# automatic nitro only on roads this easy, per strategy (keeps the opponents apart)
+NITRO_AUTO_MAX_DIFFICULTY = {"human": 2, "fixed": 2, "shortcut": 3, "shortest": 1}
+PICKUP_COST_SCALE = 10         # knapsack cost unit: tenths of a second of detour time
+PICKUP_DETOUR_BUDGET = 6.0     # s of detour the pickup planner may spend per plan
+PICKUP_NITRO_BENEFIT = 20      # benefit of one nitro charge: the 2.0 s one activation saves, in tenths
+OPPONENT_STRATEGIES = ("fixed", "shortcut", "shortest")   # repeated when more than three opponents race
