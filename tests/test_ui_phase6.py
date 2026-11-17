@@ -300,3 +300,14 @@ def test_explorer_multi_objective_view(app, mode):
 def test_phase6_screenshots(app, tmp_path):
     saved = shoot_phase6(tmp_path, app)
     assert len(saved) >= 11 and all(p.stat().st_size > 5000 for p in saved)
+
+
+def test_briefing_scouting_uses_gameplay_bfs_and_dfs():
+    from smart_racing.tracks.loader import load_builtin
+    from smart_racing.ui.screens.championship import scouting
+    for name in config.BUILTIN_CIRCUITS:
+        g = load_builtin(name).graph
+        bfs_line, dfs_line = scouting(g)
+        n = len(g.checkpoints())
+        assert bfs_line.startswith(f"BFS: {n}/{n} reachable, Finish ") and "dead ends at v" in dfs_line
+        assert "cycle found" in dfs_line

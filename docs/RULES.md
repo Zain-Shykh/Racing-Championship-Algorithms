@@ -401,7 +401,14 @@ All three are deterministic and obey the rules and recovery policy above.
   current vertex.
 - **DP and greedy** are both solved and returned. The player's autopilot
   applies the DP selection (`pickup_solver="dp"`, default) or the greedy one
-  (`"greedy"`), or none (`None`).
+  (`"greedy"`), or none (`None`). The choice is the **Pickup planner** setting of
+  Quick Race (`Settings.pickup_solver`: dp, greedy, none), passed through
+  `RaceScreen` and the championship flow to `create_race`. The autopilot keeps
+  its latest `PickupPlan` (`Autopilot.last_picks`) and the Racing Screen's
+  controls panel shows "Planner DP: DP x vs greedy y, n pickup(s)", so the
+  two solvers' benefits are visible during play; the Explorer's resource tab
+  shows the same comparison before the race. The fuel check above applies to
+  either solver, so a greedy plan is also feasible (tested for both).
 - **Refuel plan.** Stops = the current vertex (fuel on sale only if it is an
   active station) and each later visit to an active station on the route.
   The autopilot runs the DP with 2 units held back and buys its first
@@ -431,12 +438,12 @@ Every gameplay call goes to the one implementation in `smart_racing/algorithms/`
 
 | # | Algorithm | Function | Gameplay call sites |
 |---|---|---|---|
-| 1 | BFS | `bfs.bfs` | `tracks/validator.validate`: ordered checkpoint and lap-return reachability of every circuit that is loaded or generated; `tracks/generator`: hop bounds for loop-closure pruning. Track Explorer reachability (Phase 5). |
-| 2 | DFS | `dfs.dfs`, `find_cycle`, `connected_components`, `dead_ends`, `enumerate_paths` | `validator.validate`: cycle, dead end and two Start-Finish routes; `generator`: candidate-graph connectivity and the critical-bridge pruning rule. Explorer alternative routes (Phase 5). |
+| 1 | BFS | `bfs.bfs` | `tracks/validator.validate`: ordered checkpoint and lap-return reachability of every circuit that is loaded or generated; `tracks/generator`: hop bounds for loop-closure pruning. Track Explorer reachability (Phase 5). Championship briefing (`ui/screens/championship.scouting`): checkpoints reachable and fewest roads Start to Finish. Not called inside the per-tick race loop. |
+| 2 | DFS | `dfs.dfs`, `find_cycle`, `connected_components`, `dead_ends`, `enumerate_paths` | `validator.validate`: cycle, dead end and two Start-Finish routes; `generator`: candidate-graph connectivity and the critical-bridge pruning rule. Explorer alternative routes (Phase 5). Championship briefing: cycle and dead ends of the circuit about to be raced. Not called inside the per-tick race loop. |
 | 3 | Dijkstra | `dijkstra.dijkstra` | `engine/routing.plan_through` for Opponent 3 (`opponents.ShortestDistance.plan`, distance cost); `routing.nearest_station` (recovery rule 3, fuel cost); `opponents.FixedRoute.plan` (rejoining the lap); `resources.pickup_plan` (detour loops, time cost); `validator.checkpoint_route` (fuel rule). |
 | 4 | A* | `astar.astar` | `routing.plan_through` for the player's recommended line (`opponents.Autopilot.plan`), at race start and at every re-plan in `race.RaceEngine._replan`; `routing.compare_presets` for the route comparison. |
 | 5 | Dynamic programming | `knapsack.knapsack_dp`, `refuel.plan_refuel` | `resources.pickup_plan` (pickups added to the autopilot route); `resources.refuel_plan`, called by `Autopilot.refuel_amount` at every station and by `pickup_plan` as the fuel check; `validator.fuel_plan`. |
-| 6 | Greedy | `knapsack.knapsack_greedy` | `resources.pickup_plan`: returned beside the DP for the recommendation panel and applied to the autopilot route when the race is created with `pickup_solver="greedy"`. |
+| 6 | Greedy | `knapsack.knapsack_greedy` | `resources.pickup_plan`: returned beside the DP for the recommendation panel and applied to the autopilot route when the Quick Race "Pickup planner" setting (or `create_race(pickup_solver="greedy")`) selects it; the Racing Screen shows both benefits. |
 | 7 | Backtracking | `backtracking.solve` | `tracks/generator`: main-loop search and placement of shortcuts, stations, checkpoints, pickups and obstacle sites for generated circuits. |
 | 8 | Kruskal (MST) | `mst.kruskal` | `tracks/generator`: road backbone of a generated circuit. |
 | 9 | Heap / priority queue | `heap.MinHeap` | `engine/events.EventQueue` (every race event, popped by `RaceEngine.step`); frontier of Dijkstra and A*; `topk.top_k` in `RaceEngine.live_top_k` (running order) and `Championship.top` (standings). |
@@ -462,3 +469,64 @@ Every gameplay call goes to the one implementation in `smart_racing/algorithms/`
 - **Generator view** shows the accepted attempt's stages; rejected attempts appear as text with the validator's reasons.
   Saved circuits go to `~/.smart_racing/generated_seed<N>.json`.
 - **Multi-objective** is the Explorer's Compare tab (three modes), with the weights table and the limits of one scalar.
+
+## Audit additions (Project.md clause review, docs/AUDIT.md)
+
+### Cost normalisation rationale (Project.md 3.3)
+- Terms: `D/100`, `T/10`, `F/10` (reference values `DIST_REF`, `TIME_REF`,
+  `FUEL_REF`), `R = (difficulty - 1)/4` and `O` (obstacle penalty) are already
+  in [0, 1]. References are round numbers near the upper range of the
+  built-in edges (distance 57 to 316, median 177; time 1.3 to 9.6, median 4.2;
+  fuel 0.8 to 13, median 2.7), so the T, F, R, O terms are of order 0 to 1 and
+  none of them is switched off by its unit. The distance term is the largest
+  (median 1.8 against 0.4 for time and 0.3 for fuel): distance is the longest
+  quantity in the data and Balanced keeps weight 1 on it as the brief's
+  "moderate weights". The presets then tilt the weights: Speed raises wT to 3
+  and cuts wF to 0.25, Economy raises wF to 3, Safety raises wR and wO to 3.
+  All weights are >= 0, so every edge cost is >= 0 and Dijkstra applies.
+- The cost shown to the player is `route_summary(...)["cost"]`, summed from the
+  same `cost_fn` the search minimised. Different presets choose different
+  routes: Speed and Economy differ on at least one circuit and Grand Ring gives at least three distinct routes
+  (`tests/test_tracks.py::test_presets_choose_different_routes`).
+- Limit: a weighted sum depends on the reference values and weights; changing
+  them changes the winner, and it can miss Pareto-optimal routes.
+
+### Backtracking: worst case and pruning (Project.md 5.4)
+- With `n` variables and domains of size `d`, plain backtracking can try
+  `O(d^n)` assignments (exponential), for example placing 10 ordered
+  checkpoints, stations and pickups on a 20-vertex loop. The search is
+  exhaustive only when no pruning applies and the node limit is not hit.
+- Each pruning rule (see Generator) rejects a partial assignment as soon as a
+  hard requirement is violated, so the whole subtree below it is skipped.
+  Rules are safe because each tests a necessary condition of a valid track
+  (a lower bound such as BFS hops, a spacing or degree cap, or "enough free
+  positions remain"), never a preference. `nodes`, `prunes` and `backtracks`
+  are counted; `GEN_LOOP_NODE_LIMIT` and the 20-attempt retry limit bound the
+  work, and exceeding them ends the search with no solution (the generator then retries or rejects
+  the candidate), never a hang.
+
+### Lazy deletion trade-off (Project.md 4.5)
+- Cancelling marks the event `cancelled` in O(1) and leaves it in the heap;
+  `pop_due` discards it at the top. This is simpler than deleting from the
+  middle of a binary heap (O(n) search or an index map), at the cost of
+  cancelled entries using memory until they reach the top.
+
+### Never frozen silently (Project.md 5.4)
+- A racer cut off from the finish re-plans (rule 1), then waits with a
+  visible reason ("no open route", "fuel station closed", "out of fuel"),
+  and is DNF after 60 s or at once when no pending event can change the
+  graph (rule 4). Waiting and DNF are written to the race log (`wait`, `dnf`
+  entries with the reason) and shown in the event feed; the policy cannot hang
+  (see Recovery policy).
+
+### Where the knapsack and refuel DP are specified
+- `knapsack_dp` docstring: state `dp[i][b]`, base case `dp[0][b] = 0`,
+  recurrence, strict-improvement tie rule, traceback, O(mB) time and space,
+  pseudo-polynomial in B. `plan_refuel` docstring: state `dp[j][f]`, base case,
+  transition with `0 <= a <= min(max_purchase, capacity - f)`, rounding rules,
+  unreachable states skipped, O(m C^2) with C in `FUEL_SCALE` units
+  (`FUEL_SCALE = 10` multiplies the fuel axis, hence the state count, by 10;
+  purchases are whole units to keep the inner loop at most 41 values).
+  Replay in the engine: `test_recommended_pickup_and_refuel_plan_is_feasible_in_the_engine`
+  runs the autopilot with each solver on every circuit and checks it finishes
+  with non-negative fuel and no DNF.

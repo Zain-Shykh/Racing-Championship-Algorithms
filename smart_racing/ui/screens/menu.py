@@ -86,11 +86,15 @@ class QuickRaceSetup(Screen):
                          self._set("opponents"))
         self.auto = Cycle((x, 390, w, 44), "Autopilot", [True, False], 0 if s.autopilot else 1,
                           self._set("autopilot"), lambda v: "On (follows the planned route)" if v else "Off (you pick the roads)")
-        self.widgets += [self.circuit, self.laps, self.preset, self.opp, self.auto,
-                         Button((x, 470, w, 56), "Start Race", self.start, color=(40, 120, 70)),
-                         Button((x, 540, 250, 48), "Explore this circuit",
+        self.planner = Cycle((x, 450, w, 44), "Pickup planner", ["dp", "greedy", "none"],
+                              ["dp", "greedy", "none"].index(s.pickup_solver), self._set("pickup_solver"),
+                              {"dp": "DP knapsack (optimal)", "greedy": "Greedy ratio (heuristic)",
+                               "none": "None (no pickup detours)"}.get)
+        self.widgets += [self.circuit, self.laps, self.preset, self.opp, self.auto, self.planner,
+                         Button((x, 515, w, 56), "Start Race", self.start, color=(40, 120, 70)),
+                         Button((x, 585, 250, 48), "Explore this circuit",
                                 lambda: app.goto("explorer", circuit=s.circuit)),
-                         Button((x + 270, 540, 250, 48), "Back", lambda: app.goto("menu"))]
+                         Button((x + 270, 585, 250, 48), "Back", lambda: app.goto("menu"))]
         self.panel = Panel((620, 150, 600, 520))
         self.preview = Preview((630, 160, 580, 400))
 
@@ -100,7 +104,7 @@ class QuickRaceSetup(Screen):
     def start(self) -> None:
         s = self.app.settings
         self.app.goto("race", circuit=s.circuit, laps=s.laps, preset=s.preset, opponents=s.opponents,
-                      autopilot=s.autopilot)
+                      autopilot=s.autopilot, pickup_solver=s.pickup_solver)
 
     def draw(self, surf) -> None:
         super().draw(surf)

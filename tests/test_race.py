@@ -267,3 +267,26 @@ def test_up_to_ten_racers_and_live_order():
             assert top.items == order[:k] and top.heap_ops > 0
         assert [engine.race_position(r.id) for r in order] == list(range(1, C.MAX_RACERS + 1))
     assert engine.finished and all(r.status == FINISHED for r in engine.racers)
+
+
+@pytest.mark.parametrize("solver", ["dp", "greedy"])
+@pytest.mark.parametrize("name", C.BUILTIN_CIRCUITS)
+def test_recommended_pickup_and_refuel_plan_is_feasible_in_the_engine(name, solver):
+    """Project.md 5.3: the planner's recommendations replay in the engine without a fuel failure."""
+    engine = create_race(name, pickup_solver=solver).run_to_completion()
+    me = engine.human
+    assert me.status == FINISHED and me.fuel >= 0.0
+    assert walk(engine.graph, engine.graph.start.id, me.driven)[-1] == engine.graph.finish.id
+    assert not [e for e in engine.log if e.racer_id == me.id and e.kind == "dnf"]
+
+
+def test_simultaneous_events_apply_in_heap_order_then_one_replan_per_racer():
+    script = [{"time": 5, "type": C.EVENT_OIL_SPILL, "target": 3},
+              {"time": 5, "type": C.EVENT_ROAD_BLOCK, "target": 6}]       # listed first, but priority 3 vs 1
+    engine = create_race("harbor_eight", events=script)
+    while engine.clock < 6.0:
+        engine.step()
+    at_five = [f.text for f in engine.feed if f.time == 5.0]
+    assert at_five[0].startswith("Road blocked") and "il" in at_five[1]
+    for r in engine.racers:
+        assert len([e for e in engine.log if e.kind == "reroute" and e.racer_id == r.id and e.time == 5.0]) <= 1

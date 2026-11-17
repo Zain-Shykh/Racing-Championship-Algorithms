@@ -35,20 +35,23 @@ def clock_text(t: float) -> str:
 
 class RaceScreen(Screen):
     def __init__(self, app, circuit: str | None = None, laps: int | None = None, preset: str | None = None,
-                 opponents: int | None = None, autopilot: bool | None = None, engine: RaceEngine | None = None,
+                 opponents: int | None = None, autopilot: bool | None = None, pickup_solver: str | None = None, engine: RaceEngine | None = None,
                  on_finish=None, on_continue=None, continue_label: str = "Next race", on_restart=None,
                  **kw) -> None:
         super().__init__(app)
         s = app.settings
         self.config = dict(circuit=circuit or s.circuit, laps=laps or s.laps, preset=preset or s.preset,
                            opponents=s.opponents if opponents is None else opponents,
-                           autopilot=s.autopilot if autopilot is None else autopilot)
+                           autopilot=s.autopilot if autopilot is None else autopilot,
+                           pickup_solver=pickup_solver or s.pickup_solver)
         track = self.config["circuit"]
         if isinstance(track, Circuit):
             track = circuit_from_dict(circuit_to_dict(track))
         self.engine = engine or create_race(track, self.config["laps"], self.config["preset"],
                                             default_racers(self.config["opponents"]),
-                                            autopilot=self.config["autopilot"])
+                                            autopilot=self.config["autopilot"],
+                                            pickup_solver=None if self.config["pickup_solver"] == "none"
+                                            else self.config["pickup_solver"])
         e = self.engine
         self.on_finish, self.on_continue, self.continue_label = on_finish, on_continue, continue_label
         self.on_restart = on_restart
@@ -437,6 +440,7 @@ class RaceScreen(Screen):
             text(surf, "Autopilot drives and refuels.", (x, y), 21, GOOD)
             text(surf, "A: take over  Space: nitro", (x, y + 22), 20, DIM)
             text(surf, "Tab: speed   P/Esc: pause", (x, y + 44), 20, DIM)
+            text(surf, fit(self.planner_line(), 20, COL_W - 24), (x, y + 66), 20, ACCENT)
             return
         if len(choices) > 1:
             for i, c in enumerate(choices[:max(1, (rect.bottom - y - 6) // 21)]):
@@ -444,6 +448,15 @@ class RaceScreen(Screen):
                 line = f"{i + 1}: to v{c.to_vertex}  {c.time:.1f}s  {c.fuel:.1f}f" + ("  *" if c.recommended else "")
                 text(surf, fit(line, 21, COL_W - 24), (x, y + i * 21), 21,
                      ACCENT if chosen else GOOD if c.recommended else TEXT, bold=chosen)
+
+    def planner_line(self) -> str:
+        """Which pickup planner the autopilot uses and what DP and greedy last chose."""
+        mode = self.config["pickup_solver"]
+        picks = getattr(self.me.strategy, "last_picks", None) if self.me else None
+        if mode == "none" or picks is None:
+            return f"Pickup planner: {mode.upper()}"
+        return (f"Planner {mode.upper()}: DP {picks.dp.total_benefit:g} vs greedy {picks.greedy.total_benefit:g}, "
+                f"{len(picks.recommended)} pickup(s)")
 
     def draw_events(self, surf) -> None:
         rect = self._events_rect()

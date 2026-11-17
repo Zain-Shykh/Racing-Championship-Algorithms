@@ -142,3 +142,15 @@ def test_pickup_plan_never_recommends_what_fuel_cannot_cover():
     assert plan.edges == lap
     short = pickup_plan(g, g.start.id, lap, need - 5.0, 1, 30.0)  # not even the route itself
     assert not short.feasible and short.recommended == []
+
+
+def test_autopilot_honours_the_pickup_solver_and_keeps_both_results():
+    from smart_racing.engine.opponents import Autopilot
+    from smart_racing.engine.race import create_race
+    for solver in ("dp", "greedy"):
+        engine = create_race("grand_ring", pickup_solver=solver)
+        pilot = engine.human.strategy
+        pilot.plan(engine.circuit, engine.circuit.graph.start.id, 1, 1, engine.human)
+        assert isinstance(pilot, Autopilot) and pilot.pickup_solver == solver
+        assert pilot.last_picks.dp.total_benefit >= pilot.last_picks.greedy.total_benefit
+    assert create_race("grand_ring", pickup_solver=None).human.strategy.last_picks is None

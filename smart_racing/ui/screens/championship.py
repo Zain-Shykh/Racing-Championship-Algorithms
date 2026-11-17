@@ -10,6 +10,8 @@ import math
 import pygame
 
 from smart_racing import config
+from smart_racing.algorithms.bfs import bfs
+from smart_racing.algorithms.dfs import dead_ends, find_cycle
 from smart_racing.engine.championship import Championship
 from smart_racing.engine.race import default_racers
 from smart_racing.tracks.loader import load_builtin
@@ -20,12 +22,24 @@ from smart_racing.ui.widgets import (ACCENT, BORDER, DIM, GOOD, PANEL, TEXT, WAR
                                      text, wrap)
 
 
+def scouting(g) -> list[str]:
+    """Pre-race briefing lines from the gameplay BFS (reachable checkpoints, fewest roads to Finish) and DFS (cycle, dead ends)."""
+    reach = bfs(g, g.start.id)
+    cps = g.checkpoints()
+    ends = dead_ends(g).dead_ends
+    return [f"BFS: {sum(c.id in reach.dist for c in cps)}/{len(cps)} reachable, Finish "
+            f"{reach.dist.get(g.finish.id, 'unreachable')} roads away",
+            f"DFS: cycle {'found' if find_cycle(g).has_cycle else 'none'}; dead ends at "
+            f"{', '.join(f'v{v}' for v in ends) or 'none'}"]
+
+
 class ChampFlow:
     """The championship in progress and where the player is in it."""
 
     def __init__(self, settings) -> None:
         self.champ = Championship(laps=settings.laps, preset=settings.preset,
-                                  racers=default_racers(settings.opponents), autopilot=settings.autopilot)
+                                  racers=default_racers(settings.opponents), autopilot=settings.autopilot,
+                                  pickup_solver=None if settings.pickup_solver == "none" else settings.pickup_solver)
         self.phase = "briefing"            # briefing | results | champion
         self.last: list = []               # RaceResult list of the race just run
 
@@ -110,6 +124,7 @@ class ChampionshipScreen(Screen):
             name = self.champ.circuits[n - 1]
             self.circuit = load_builtin(name)
             self.view = GraphView(self.circuit.graph, pygame.Rect(12, 100, 760, 560), 40)
+            self.scout = scouting(self.circuit.graph)
             self.auto = Cycle((792, 600, 476, 40), "Your car", [True, False], 0 if self.champ.race_options["autopilot"] else 1,
                               self.set_auto, lambda v: "Autopilot on" if v else "You drive", 100)
             self.widgets = [self.auto, Button((792, 650, 230, 52), "Start race", self.start_race, color=(40, 120, 70)),
@@ -199,6 +214,7 @@ class ChampionshipScreen(Screen):
                  f"{sum(1 for v in g.vertices() if v.type == 'NitroPickup')} nitro pickups",
                  f"{len(self.circuit.events)} scripted events (blockages, oil, speed limits, outages)",
                  f"{c.laps} lap{'s' if c.laps != 1 else ''}, cost preset {c.preset}"]
+        facts += self.scout
         y = 140
         for f in facts:
             text(surf, fit(f, 22, 460), (796, y), 22, TEXT)

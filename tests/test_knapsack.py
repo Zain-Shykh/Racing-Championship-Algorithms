@@ -10,6 +10,8 @@ SUPPLIED = [Item(1, 6, 30, "A"), Item(2, 5, 24, "B"), Item(3, 5, 24, "C")]
 TEAM_CASES = [
     ([Item(1, 6, 12), Item(2, 5, 9), Item(3, 5, 9)], 10, 12, 18),
     ([Item(1, 10, 60), Item(2, 20, 100), Item(3, 30, 120)], 50, 160, 220),
+    ([Item(1, 1, 2), Item(2, 10, 10)], 10, 2, 10),                                   # Exp 3 team 1: ratio leader blocks the big item
+    ([Item(1, 5, 10), Item(2, 4, 7), Item(3, 4, 7), Item(4, 4, 7)], 12, 17, 21),     # Exp 3 team 2: ratio leader wastes budget
 ]
 
 

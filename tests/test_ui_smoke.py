@@ -222,3 +222,17 @@ def test_junction_click_chooses_road(app):
 def test_screenshot_helper_writes_images(app, tmp_path):
     saved = shoot_all(tmp_path, app)
     assert len(saved) >= 7 and all(p.stat().st_size > 5000 for p in saved)
+
+
+def test_pickup_planner_setting_reaches_the_race_and_hud(app):
+    for mode in ("dp", "greedy", "none"):
+        app.settings.pickup_solver = mode
+        app.goto("quick")
+        app.pump(frames=2)
+        app.screen.start()
+        app.pump(frames=2)
+        race = app.screen
+        assert race.config["pickup_solver"] == mode
+        assert race.me.strategy.pickup_solver == (None if mode == "none" else mode)
+        assert race.planner_line().startswith(("Pickup planner", "Planner"))
+    app.settings.pickup_solver = "dp"

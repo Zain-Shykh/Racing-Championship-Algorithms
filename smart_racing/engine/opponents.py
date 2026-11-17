@@ -154,6 +154,7 @@ class Autopilot:
         self.preset = preset
         self.pickup_solver = pickup_solver     # "dp", "greedy" or None (no pickup detours)
         self.pickup_budget = pickup_budget     # seconds of detour accepted per plan
+        self.last_picks = None                 # the latest PickupPlan: DP and greedy side by side, for the HUD
 
     def plan(self, circuit: Circuit, vertex: int, next_checkpoint: int, laps: int, racer=None) -> RoutePlan:
         g = circuit.graph
@@ -161,6 +162,7 @@ class Autopilot:
         if plan.found and racer is not None and self.pickup_solver:
             picks = pickup_plan(g, vertex, plan.edges, racer.fuel, racer.nitro_charges,
                                 self.pickup_budget, self.pickup_solver)
+            self.last_picks = picks
             if picks.edges != plan.edges:
                 plan = make_plan(g, walk(g, vertex, picks.edges), picks.edges, self.preset,
                                  "astar", plan.targets, plan.legs)

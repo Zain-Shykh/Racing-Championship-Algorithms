@@ -31,6 +31,7 @@ class Settings:
     circuit: str = config.BUILTIN_CIRCUITS[0]
     opponents: int = config.NUM_OPPONENTS
     autopilot: bool = True
+    pickup_solver: str = "dp"             # pickup planner the autopilot applies: "dp", "greedy" or "none"
 
 
 class Screen:
