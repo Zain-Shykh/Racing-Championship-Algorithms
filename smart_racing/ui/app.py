@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import pygame
 
 from smart_racing import config
-from smart_racing.ui.widgets import BAD, BG, TEXT, text
+from smart_racing.ui.widgets import BAD, BG, TEXT, _fonts, text
 
 W, H = 1280, 720
 FPS = 60
@@ -72,6 +72,7 @@ class Screen:
 class App:
     def __init__(self) -> None:
         pygame.init()
+        _fonts.clear()                   # fonts of an earlier pygame.quit() are dead (tests open several Apps)
         pygame.display.set_caption("Smart Racing Championship")
         try:
             self.surface = pygame.display.set_mode((W, H), pygame.SCALED | pygame.RESIZABLE)
@@ -79,6 +80,7 @@ class App:
             self.surface = pygame.display.set_mode((W, H))
         self.clock = pygame.time.Clock()
         self.settings = Settings()
+        self.flow = None                 # the championship in progress (screens/championship.py ChampFlow)
         self.running = True
         self.screen: Screen | None = None
         self.screen_name = ""

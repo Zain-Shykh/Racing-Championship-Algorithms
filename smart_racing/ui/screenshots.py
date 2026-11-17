@@ -90,11 +90,75 @@ def shoot_all(out: str | Path, app: App | None = None) -> list[Path]:
     return saved
 
 
+def play_championship_race(app: App) -> None:
+    """From a championship briefing: start the race, run it fast to the end, open the results screen."""
+    app.click_label("Start race")
+    rs = app.screen
+    rs.set_speed(4)
+    assert run_until(app, lambda: rs.results is not None, 0.25), "race did not finish"
+    app.pump(frames=2)
+    app.click_label("Results and standings")
+
+
+def shoot_phase6(out: str | Path, app: App | None = None) -> list[Path]:
+    """Algorithm Lab, championship flow, dashboard, generator and multi-objective screenshots."""
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    own = app is None
+    app = app or App()
+    saved: list[Path] = []
+    laps = app.settings.laps
+    app.settings.laps = 1
+
+    def snap(name: str) -> None:
+        app.pump(frames=2)
+        path = out / f"{name}.png"
+        app.save(str(path))
+        saved.append(path)
+
+    def lab(algo: str, name: str, fraction: float) -> None:
+        app.goto("lab", algo=algo)
+        app.screen.pos = int(app.screen.total * fraction)
+        snap(name)
+
+    lab("A*", "lab_astar_midrun", 0.5)
+    lab("Knapsack DP", "lab_knapsack_table", 1.0)
+    lab("Merge sort", "lab_sorts", 0.7)
+    lab("Event heap", "lab_event_heap", 0.55)
+    lab("Backtracking", "lab_backtracking", 0.6)
+    app.goto("championship", new=True)
+    snap("championship_briefing")
+    play_championship_race(app)
+    snap("championship_standings")
+    for _ in range(2):
+        app.click_label("Next race")
+        play_championship_race(app)
+    app.click_label("Champion!")
+    snap("champion")
+    app.click_label("Dashboard")
+    snap("dashboard")
+    app.screen.mode.step(2)                                # large sample field: top-k against a full sort
+    app.screen.kcycle.set_value(5)
+    app.screen.refresh()
+    snap("dashboard_large_field_topk")
+    app.goto("generator", seed=29)
+    snap("generator_rejected_candidate")
+    app.goto("explorer", circuit="harbor_eight")
+    click_tab(app, "Compare")
+    app.screen.mode.step(1)                                # presets over the full lap
+    snap("explorer_multi_objective")
+    app.settings.laps = laps
+    if own:
+        pygame.quit()
+    return saved
+
+
 def click_tab(app: App, name: str) -> None:
     tabs = app.screen.tabs
     app.click(tabs._tab(tabs.names.index(name)).center)
 
 
 if __name__ == "__main__":
-    for p in shoot_all(sys.argv[1] if len(sys.argv) > 1 else "docs/screenshots"):
+    folder = sys.argv[1] if len(sys.argv) > 1 else "docs/screenshots"
+    for p in shoot_all(folder) + shoot_phase6(folder):
         print("saved", p)

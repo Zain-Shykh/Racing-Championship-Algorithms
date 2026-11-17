@@ -14,7 +14,7 @@ phase is committed and pushed to `origin/main`.
 | 3 | Tracks, validator, generator and event system | 2 | done |
 | 4 | Race engine, opponents and championship | 3 | done |
 | 5 | GUI part 1: app shell, menu, explorer, racing screen | 4 | done |
-| 6 | GUI part 2: algorithm lab, dashboard, generator view | 5 | pending |
+| 6 | GUI part 2: algorithm lab, dashboard, generator view | 5 | done |
 | 7 | Five experimental studies | 4 | done |
 | 8 | Report, README, packaging and final QA | 6, 7 | pending |
 

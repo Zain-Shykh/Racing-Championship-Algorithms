@@ -44,11 +44,11 @@ def test_every_screen_opens_and_escape_returns(app):
 def test_menu_buttons_reach_screens(app):
     for label, name in [("Quick Race", "quick"), ("Track Explorer", "explorer"), ("Instructions", "instructions"),
                         ("Settings", "settings"), ("Championship", "championship"), ("Algorithm Lab", "lab"),
-                        ("Dashboard", "dashboard")]:
+                        ("Championship Dashboard", "dashboard"), ("Track Generator", "generator")]:
         app.click_label(label)
         assert app.screen_name == name
         app.pump(frames=2)
-        app.click_label("Back" if name in ("quick", "explorer", "instructions", "settings") else "Back to menu")
+        app.click_label("Back")
         assert app.screen_name == "menu"
 
 

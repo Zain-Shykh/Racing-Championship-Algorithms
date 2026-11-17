@@ -443,3 +443,22 @@ Every gameplay call goes to the one implementation in `smart_racing/algorithms/`
 | 10 | Merge sort | `sorting.merge_sort` | `Championship.standings` (default); `RaceEngine.running_order` / `classification` (race positions and final result); edge order in Kruskal; item order in greedy knapsack. |
 | 11 | Quick sort | `sorting.quick_sort` | `Championship.standings("quick")`, selectable on the dashboard. |
 | 12 | Heap sort | `sorting.heap_sort` | `Championship.standings("heap")`, selectable on the dashboard. |
+
+## Phase 6: GUI part 2 decisions
+- **Lab replay.** `ui/lab_registry.py` maps each Lab name to the gameplay function (`ALGOS[name].fn is` the function
+  in `smart_racing.algorithms`, `EventQueue` for the heap) and records its `observer` steps. The event heap has no
+  observer, so the Lab drives the same `EventQueue` calls (schedule, cancel, pop_due) and records each one with a
+  snapshot of the track effects. Counters shown live are rebuilt from the replayed steps; the rest appear at the last
+  step and equal the result object's counters (tested against a direct call with no observer).
+- **Lab data.** Graph searches: Start to checkpoint 6 of the chosen circuit (click to change). Knapsack: the brief's
+  A/B/C example, two greedy traps, a random set, or the circuit's own pickup options (editable). Backtracking: fuel
+  stations spaced along the main route (cyclic gap, off mandatory vertices). Kruskal: all roads weighted by length.
+  Sorts: 12 or 24 sample entries or the current championship standings; the three sorts run side by side.
+- **Championship flow.** `app.flow` holds the `Championship` and the phase (briefing, results, champion), so leaving a
+  screen never loses progress; Esc/Back at a point with recorded races asks first, and "Championship" in the menu
+  resumes it. A finished championship is replaced by a new one on the next menu click.
+- **Dashboard data.** The championship in progress, a sample championship (three one-lap races run headless) or a
+  200-entry sample field, which makes top-k against n visible. Sorts and top-k are `Championship.standings/top`.
+- **Generator view** shows the accepted attempt's stages; rejected attempts appear as text with the validator's reasons.
+  Saved circuits go to `~/.smart_racing/generated_seed<N>.json`.
+- **Multi-objective** is the Explorer's Compare tab (three modes), with the weights table and the limits of one scalar.

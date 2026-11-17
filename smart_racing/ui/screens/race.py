@@ -1,6 +1,7 @@
 """Racing Screen: the engine runs on its fixed tick, this file draws it and forwards the player's input.
 
-Hook for the championship flow: `RaceScreen(app, engine=..., on_finish=fn, on_continue=fn)`.
+`circuit` is a built-in name or a Circuit (copied, so Restart always starts from the untouched track).
+Hook for the championship flow: `RaceScreen(app, engine=..., on_finish=fn, on_continue=fn, on_restart=fn)`.
 `on_finish(engine)` is called once when the race ends (record the result there); when `on_continue` is
 given the results panel shows a "Next race" button (label via `continue_label`) that calls it.
 """
@@ -13,7 +14,7 @@ import pygame
 from smart_racing import config
 from smart_racing.engine.championship import score_race
 from smart_racing.engine.race import DNF, FINISHED, REFUELLING, WAITING, RaceEngine, create_race, default_racers
-from smart_racing.tracks.loader import load_builtin
+from smart_racing.tracks.loader import Circuit, circuit_from_dict, circuit_to_dict
 from smart_racing.ui.app import H, W, Screen
 from smart_racing.ui.render import CAR_COLORS, GraphView, Overlay, draw_legend
 from smart_racing.ui.widgets import (ACCENT, BAD, BORDER, DIM, GOOD, PANEL, ROUTE_COLORS, TEXT, WARN, Button, Panel,
@@ -35,17 +36,22 @@ def clock_text(t: float) -> str:
 class RaceScreen(Screen):
     def __init__(self, app, circuit: str | None = None, laps: int | None = None, preset: str | None = None,
                  opponents: int | None = None, autopilot: bool | None = None, engine: RaceEngine | None = None,
-                 on_finish=None, on_continue=None, continue_label: str = "Next race", **kw) -> None:
+                 on_finish=None, on_continue=None, continue_label: str = "Next race", on_restart=None,
+                 **kw) -> None:
         super().__init__(app)
         s = app.settings
         self.config = dict(circuit=circuit or s.circuit, laps=laps or s.laps, preset=preset or s.preset,
                            opponents=s.opponents if opponents is None else opponents,
                            autopilot=s.autopilot if autopilot is None else autopilot)
-        self.engine = engine or create_race(self.config["circuit"], self.config["laps"], self.config["preset"],
+        track = self.config["circuit"]
+        if isinstance(track, Circuit):
+            track = circuit_from_dict(circuit_to_dict(track))
+        self.engine = engine or create_race(track, self.config["laps"], self.config["preset"],
                                             default_racers(self.config["opponents"]),
                                             autopilot=self.config["autopilot"])
         e = self.engine
         self.on_finish, self.on_continue, self.continue_label = on_finish, on_continue, continue_label
+        self.on_restart = on_restart
         self.me = e.human
         self.view = GraphView(e.graph, VIEW, 48)
         self.speed = s.speed
@@ -164,7 +170,10 @@ class RaceScreen(Screen):
             self.modal = row
 
     def restart(self) -> None:
-        self.app.goto("race", **self.config)
+        if self.on_restart:
+            self.on_restart()
+        else:
+            self.app.goto("race", **self.config)
 
     # --- input -------------------------------------------------------------------------------------------
     def on_escape(self) -> None:

@@ -1,4 +1,4 @@
-"""Main Menu, Quick Race setup, Settings, Instructions and the "coming soon" placeholder."""
+"""Main Menu, Quick Race setup, Settings and Instructions."""
 from __future__ import annotations
 
 import pygame
@@ -33,17 +33,24 @@ class Preview:
 
 class MainMenu(Screen):
     ENTRIES = [("Championship", "championship"), ("Quick Race", "quick"), ("Track Explorer", "explorer"),
-               ("Algorithm Lab", "lab"), ("Dashboard", "dashboard"), ("Instructions", "instructions"),
-               ("Settings", "settings")]
+               ("Algorithm Lab", "lab"), ("Championship Dashboard", "dashboard"), ("Track Generator", "generator"),
+               ("Instructions", "instructions"), ("Settings", "settings")]
 
     def __init__(self, app, **kw) -> None:
         super().__init__(app)
         for i, (label, target) in enumerate(self.ENTRIES):
-            self.widgets.append(Button((80, 190 + i * 60, 380, 50), label, lambda t=target: app.goto(t)))
-        self.widgets.append(Button((80, 190 + len(self.ENTRIES) * 60, 380, 50), "Quit", app.quit, color=(110, 40, 48)))
+            self.widgets.append(Button((80, 180 + i * 54, 380, 46), label, lambda t=target: self.open(t)))
+        self.widgets.append(Button((80, 180 + len(self.ENTRIES) * 54, 380, 46), "Quit", app.quit, color=(110, 40, 48)))
         self.panel = Panel((520, 150, 700, 530))
         self.preview = Preview((530, 160, 680, 470))
         self.t = 0.0
+
+    def open(self, target: str) -> None:
+        if target == "championship":            # resume a championship in progress, otherwise start a new one
+            flow = self.app.flow
+            self.app.goto(target, new=flow is None or flow.champ.finished)
+        else:
+            self.app.goto(target)
 
     def on_escape(self) -> None:
         pass                                    # never quit by accident; the Quit button does it
@@ -55,8 +62,8 @@ class MainMenu(Screen):
         super().draw(surf)
         text(surf, "SMART RACING", (80, 56), 66, TEXT, bold=True)
         text(surf, "CHAMPIONSHIP", (80, 108), 44, ACCENT, bold=True)
-        text(surf, "12 hand-written algorithms drive every route, resource and event.",
-             (80, 150), 21, DIM)
+        text(surf, "12 hand-written algorithms power the game.",
+             (80, 146), 21, DIM)
         names = list_circuits()
         name = names[int(self.t / 4) % len(names)]
         self.panel.draw(surf)
@@ -148,7 +155,13 @@ INSTRUCTIONS = [
     "",
     ("TRACK EXPLORER", ACCENT),
     "Click a vertex to set the start or destination (use the selector), click a road to block or unblock it. "
-    "Tabs: BFS/DFS analysis, Dijkstra vs A*, route comparison, resource plan. Results update when roads change.",
+    "Tabs: BFS/DFS analysis, Dijkstra vs A*, route comparison (four weight presets side by side), resource plan.",
+    "",
+    ("ALGORITHM LAB, DASHBOARD, GENERATOR", ACCENT),
+    "Algorithm Lab: pick any of the 12 algorithms, press Play or Step, step back, change speed. It replays the steps "
+    "of the same functions the game calls. Championship runs three races; the Dashboard ranks the field with merge, "
+    "quick and heap sort and shows heap-based top-k. Track Generator builds a circuit from a seed and shows every "
+    "stage and every rejected candidate.",
     "",
     ("RULES IN BRIEF", ACCENT),
     "Tank 100 units; a road needs its full fuel to be entered. Stations sell up to 40 units per stop. "
@@ -170,17 +183,3 @@ class Instructions(Screen):
         super().draw(surf)
         text(surf, "Instructions", (140, 60), 48, TEXT, bold=True)
         text(surf, "Scroll with the mouse wheel.", (140, 108), 21, DIM)
-
-
-class Placeholder(Screen):
-    """Stands in for a screen that a later build provides."""
-
-    def __init__(self, app, title: str = "", **kw) -> None:
-        super().__init__(app)
-        self.title = title
-        self.widgets.append(Button((540, 420, 200, 52), "Back to menu", lambda: app.goto("menu")))
-
-    def draw(self, surf) -> None:
-        super().draw(surf)
-        text(surf, self.title, (640, 250), 54, TEXT, "center", bold=True)
-        text(surf, "Coming in the next build.", (640, 320), 30, DIM, "center")

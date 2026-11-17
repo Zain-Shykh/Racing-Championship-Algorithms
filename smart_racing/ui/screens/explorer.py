@@ -18,7 +18,7 @@ from smart_racing.core.cost import distance_cost, make_cost_fn, time_cost
 from smart_racing.core.graph import CHECKPOINT
 from smart_racing.engine.resources import pickup_plan
 from smart_racing.engine.routing import compare_presets, make_plan, plan_route, plan_through, race_targets
-from smart_racing.tracks.loader import list_circuits, load_builtin
+from smart_racing.tracks.loader import Circuit, circuit_from_dict, circuit_to_dict, list_circuits, load_builtin
 from smart_racing.ui.app import Screen
 from smart_racing.ui.render import GraphView, Overlay, draw_legend
 from smart_racing.ui.screens.menu import PRESETS, nice
@@ -38,6 +38,7 @@ class Result:
     overlays: list = field(default_factory=list)
     rings: dict = field(default_factory=dict)
     table: tuple | None = None             # (header, rows, widths, swatches)
+    table2: tuple | None = None            # a second table below the first (weights table of the presets)
 
 
 def fmt(x: float, nd: int = 2) -> str:
@@ -45,14 +46,18 @@ def fmt(x: float, nd: int = 2) -> str:
 
 
 class Explorer(Screen):
-    def __init__(self, app, circuit: str | None = None, **kw) -> None:
+    def __init__(self, app, circuit: "str | Circuit | None" = None, **kw) -> None:
         super().__init__(app)
+        self.custom: dict[str, dict] = {}                 # a generated circuit handed in by the Track Generator
+        if isinstance(circuit, Circuit):
+            self.custom[circuit.name] = circuit_to_dict(circuit)
+            circuit = circuit.name
         self.tab = "Reach"
         self.res: dict[str, Result] = {}
         self.again: dict[str, Callable[[], Result]] = {}
         self.alt_index = 0
         self.hover_text = "Hover a vertex or road for details."
-        names = list_circuits()
+        names = list_circuits() + list(self.custom)
         self.names = names
         self.back = Button((12, 8, 96, 40), "Back", lambda: app.goto("menu"))
         self.circuit_cycle = Cycle((330, 8, 330, 40), "Circuit", names, names.index(circuit or app.settings.circuit),
@@ -61,8 +66,7 @@ class Explorer(Screen):
                                   lambda v: self._preset(v), caption_w=100)
         self.common = [self.back, self.circuit_cycle, self.preset_cycle,
                        Button((1020, 8, 114, 40), "Reset roads", lambda: self.load(self.name)),
-                       Button((1142, 8, 126, 40), "Start race", lambda: app.goto("quick", circuit=self.name),
-                              color=(40, 120, 70))]
+                       Button((1142, 8, 126, 40), "Start race", self.start_race, color=(40, 120, 70))]
         self.pick = Cycle((RIGHT.x, 62, RIGHT.w, 36), "Click a vertex to set", ["Start", "Destination"], 0,
                           None, caption_w=190)
         self.tabs = Tabs((RIGHT.x, 156, RIGHT.w, 34), TABS, 0, self._tab)
@@ -70,7 +74,8 @@ class Explorer(Screen):
         self.scope = Cycle((RIGHT.x, 198, 330, 36), "Scope", ["Selected vertices", "Full lap"], 0,
                            lambda v: self.rerun(), caption_w=60)
         self.mode = Cycle((RIGHT.x, 198, RIGHT.w, 36), "", ["Candidate routes (selected vertices)",
-                                                             "Cost presets (full lap)"], 0, lambda v: self.rerun())
+                                                             "Cost presets (full lap)",
+                                                             "Cost presets (selected vertices)"], 0, lambda v: self.rerun())
         self.fuel = Cycle((RIGHT.x, 198, 186, 36), "Fuel", [100, 75, 50, 35, 25], 2,
                           lambda v: self.rerun(), caption_w=50)
         self.budget = Cycle((RIGHT.x + 192, 198, 180, 36), "Detour", [6.0, 12.0, 20.0], 0,
@@ -92,7 +97,7 @@ class Explorer(Screen):
     # --- state ---------------------------------------------------------------------------
     def load(self, name: str) -> None:
         self.name = name
-        self.circuit = load_builtin(name)
+        self.circuit = circuit_from_dict(self.custom[name]) if name in self.custom else load_builtin(name)
         self.g = self.circuit.graph
         self.view = GraphView(self.g, VIEW)
         self.src, self.dst = self.g.start.id, self.g.finish.id
@@ -101,6 +106,12 @@ class Explorer(Screen):
             self.circuit_cycle.set_value(name)
         self.pick.set_value("Start")
         self.invalidate()
+
+    def start_race(self) -> None:
+        if self.name in self.custom:
+            self.app.goto("race", circuit=circuit_from_dict(self.custom[self.name]))
+        else:
+            self.app.goto("quick", circuit=self.name)
 
     @property
     def preset(self) -> str:
@@ -134,7 +145,7 @@ class Explorer(Screen):
         if self.tab not in self.res:
             self.res[self.tab] = self.again.get(self.tab, self.defaults[self.tab])()
         r = self.res[self.tab]
-        top = CONTENT_Y + (draw_table_height(r.table) + 6 if r.table else 0)
+        top = CONTENT_Y + sum(draw_table_height(t) + 6 for t in (r.table, r.table2) if t)
         self.text.rect = pygame.Rect(RIGHT.x, top, RIGHT.w, RIGHT.bottom - top)
         self.text.offset = 0
         self.text.set_lines(r.lines)
@@ -265,28 +276,36 @@ class Explorer(Screen):
         g, res = self.g, Result()
         if self.mode.index == 0:
             return self.candidates(g, res)
-        plans = compare_presets(g, g.start.id)
+        between = self.mode.index == 2
+        plans = ({p: plan_through(g, self.src, [self.dst], p, "astar") for p in config.COST_PRESETS} if between
+                 else compare_presets(g, g.start.id))
         names = list(plans)
+        scope = f"{self.vlabel(self.src)} to {self.vlabel(self.dst)}" if between else "Full lap"
         if not all(p.found for p in plans.values()):
-            res.lines = [(f"UNREACHABLE: the full lap cannot be completed under the current roads "
+            res.lines = [(f"UNREACHABLE: {scope} cannot be driven under the current roads "
                           f"(first missing target v{next(p for p in plans.values() if not p.found).failed_target}).", BAD)]
             return res
         base = set(plans["Balanced"].edges)
+        balanced = make_cost_fn("Balanced")
         rows, sw = [], []
         for i, name in enumerate(names):
             p = plans[name]
-            rows.append([name, str(len(p.edges)), fmt(p.distance, 0), fmt(p.time, 1), fmt(p.fuel, 1),
-                         fmt(p.cost, 3), str(len(set(p.edges) ^ base))])
+            rows.append([name, str(len(p.edges)), fmt(p.distance, 0), fmt(p.time, 1), fmt(p.fuel, 1), fmt(p.cost, 3),
+                         fmt(sum(balanced(self.g.edge(e)) for e in p.edges), 3), str(len(set(p.edges) ^ base))])
             sw.append(ROUTE_COLORS[i])
             res.overlays.append(Overlay(p.edges, ROUTE_COLORS[i], 4, (i - 1.5) * 4))
-        res.table = (["Preset", "Roads", "Dist", "Time", "Fuel", "Cost*", "Diff"], rows,
-                     [118, 56, 56, 56, 56, 70, 48], sw)
+        res.table = (["Full lap" if not between else "A to B", "Roads", "Dist", "Time", "Fuel", "Cost*", "Bal.", "Diff"], rows,
+                     [94, 58, 52, 52, 48, 60, 60, 44], sw)
+        res.table2 = (["Weights", "wD", "wT", "wF", "wR", "wO"],
+                      [[n] + [f"{w:g}" for w in config.COST_PRESETS[n]] for n in names], [118, 62, 62, 62, 62, 62], sw)
         distinct = len({tuple(p.edges) for p in plans.values()})
-        res.lines = [("Full lap, A*, each preset under its own weights", ACCENT),
-                     f"{distinct} different routes among the 4 presets.",
-                     "*Cost is measured with that preset's own weights, so costs of different rows are not comparable. "
-                     "Diff = roads that differ from the Balanced route.",
-                     "Speed prefers fast roads, Economy low fuel, Safety low difficulty and obstacles."]
+        res.lines = [f"{distinct} different route{'s' if distinct != 1 else ''} among the 4 presets (A*). Cost* uses each "
+                     "preset's own weights; Bal. re-scores every route with the Balanced weights; Diff = roads unlike the "
+                     "Balanced route.",
+                     ("Limits of one weighted scalar", WARN),
+                     "Weights are arbitrary: no setting is right, and a small change can flip the route.",
+                     "Normalisation references (100, 10, 10) silently set the exchange rate between objectives.",
+                     "A weighted sum can miss Pareto-optimal routes that lie off the convex edge of the trade-off."]
         return res
 
     def candidates(self, g, res: Result) -> Result:
@@ -428,6 +447,9 @@ class Explorer(Screen):
         if r.table:
             header, rows, widths, sw = r.table
             draw_table(surf, (RIGHT.x, CONTENT_Y, sum(widths) + 12, 0), header, rows, widths, sw)
+        if r.table2:
+            header, rows, widths, sw = r.table2
+            draw_table(surf, (RIGHT.x, CONTENT_Y + draw_table_height(r.table) + 6, sum(widths) + 12, 0), header, rows, widths, sw)
         self.text.draw(surf)
 
 
