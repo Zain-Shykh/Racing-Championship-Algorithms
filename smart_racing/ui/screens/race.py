@@ -75,6 +75,7 @@ class RaceScreen(Screen):
                                          Button((920, 10, 100, 36), "Menu", lambda: app.goto("menu"))]
         self.auto_button = Button((1028, 10, 240, 36), "", self.toggle_auto)
         self.bar.append(self.auto_button)
+        self.buy_buttons = []
         py = self._prompt_rect().y
         self.minus = Button((COL_X + 12, py + 74, 44, 30), "-5", lambda: self.adjust(-5))
         self.plus = Button((COL_X + 126, py + 74, 44, 30), "+5", lambda: self.adjust(5))
@@ -93,7 +94,8 @@ class RaceScreen(Screen):
 
     def _prompt_rect(self) -> pygame.Rect:
         order = self._order_rect()
-        return pygame.Rect(COL_X, order.bottom + 8, COL_W, PROMPT_H)
+        extra = 3 * 21 if any(b.visible for b in self.buy_buttons) else 0     # the buy block needs room below it for the road options
+        return pygame.Rect(COL_X, order.bottom + 8, COL_W, min(PROMPT_H + extra, 712 - order.bottom - 8))
 
     def _events_rect(self) -> pygame.Rect:
         p = self._prompt_rect()
@@ -129,7 +131,8 @@ class RaceScreen(Screen):
             self.buy_amount = max(1, min(offer[0], self.buy_amount + delta))
 
     def _buy(self, amount: int) -> None:
-        if amount < 1 or not self.engine.refuel(self.me.id, amount):
+        offer = self.engine.station_offer(self.me.id)
+        if amount < 1 or not offer or offer[0] < 1 or not self.engine.refuel(self.me.id, amount):   # offer[0] < 1: under 1 unit of room
             self.note("Cannot buy fuel here.")
 
     def buy_custom(self) -> None:
@@ -137,8 +140,10 @@ class RaceScreen(Screen):
 
     def buy_recommended(self) -> None:
         offer = self.engine.station_offer(self.me.id)
-        if offer:
-            self._buy(max(1, offer[1]))
+        if offer and offer[1] < 1:
+            self.note("Nothing recommended here: the plan needs no fuel at this station.")
+        elif offer:
+            self._buy(offer[1])
 
     def buy_fill(self) -> None:
         offer = self.engine.station_offer(self.me.id)
@@ -238,7 +243,10 @@ class RaceScreen(Screen):
             # a manual player standing at a decision is given real time to choose
             slow = self.manual and self.me.edge_id is None and (e.station_offer(self.me.id)
                                                                   or len(e.legal_choices(self.me.id)) > 1)
+            me, picked, n0 = self.me, self.me.chosen_edge if self.me else None, len(self.me.driven) if self.me else 0
             e.update(min(dt, 0.25) * (1 if slow else self.speed))
+            if picked is not None and me.chosen_edge is None and picked not in me.driven[n0:]:
+                self.note("Your chosen road is no longer available: the recommended road was taken.")
         self.sync()
         if e.finished and self.results is None:
             self.results = score_race(1, e)
@@ -423,9 +431,9 @@ class RaceScreen(Screen):
         offer = e.station_offer(r.id)
         if self.manual and offer:
             grace = max(0.0, config.PLAYER_CHOICE_GRACE - r.idle)
-            text(surf, f"Fuel station: max {offer[0]}, recommended {offer[1]}", (x, y), 21, WARN, bold=True)
+            text(surf, f"Station: max {offer[0]}, recommended {offer[1]}", (x, y), 20, WARN, bold=True)    # 264 px at most: fits the column
             text(surf, f"{r.fuel:.0f}/{config.TANK_CAPACITY:.0f} in tank; auto in {grace:.1f} s", (x, y + 22), 20, DIM)
-            text(surf, f"{self.buy_amount} units", (COL_X + 113, y + 57), 22, TEXT, "midtop")
+            text(surf, f"{self.buy_amount} units", (COL_X + 91, y + 57), 22, TEXT, "midtop")    # centred in the gap between -5 and +5
             y += 112
         elif self.manual and len(choices) > 1:
             here = r.current_vertex if r.edge_id is None else r.to_vertex

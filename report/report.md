@@ -122,7 +122,7 @@ The Algorithm Lab obtains every algorithm from `smart_racing.ui.lab_registry`, w
 
 # 7. Testing
 
-The full suite has 324 passing tests (`.venv/bin/pytest -q`). Coverage mapped to Project.md 9.1:
+The full suite has 383 passing tests (`.venv/bin/pytest -q`). Coverage mapped to Project.md 9.1:
 
 | Area | Test files |
 |---|---|
@@ -170,7 +170,7 @@ Five studies follow the required format: objective, environment, input generatio
 
 # 10. Conclusion
 
-All twelve mandatory algorithm families are implemented by hand, integrated into a deterministic playable game, visualised through the same code in the Algorithm Lab, covered by 324 tests, and measured in five reproducible experiments. All three advanced challenges are included.
+All twelve mandatory algorithm families are implemented by hand, integrated into a deterministic playable game, visualised through the same code in the Algorithm Lab, covered by 383 tests, and measured in five reproducible experiments. All three advanced challenges are included.
 
 **References and acknowledgements.** pygame-ce (GUI), matplotlib (charts), pytest (tests), pandoc and Chrome (report export), and course lecture material. No external code was copied; no assets were used (all graphics are drawn with pygame primitives).
 

@@ -530,3 +530,25 @@ Every gameplay call goes to the one implementation in `smart_racing/algorithms/`
   Replay in the engine: `test_recommended_pickup_and_refuel_plan_is_feasible_in_the_engine`
   runs the autopilot with each solver on every circuit and checks it finishes
   with non-negative fuel and no DNF.
+
+## End-to-end sync audit (tests/test_e2e_sync.py)
+The GUI was driven with real input events and every drawn number compared with the engine or an independent
+reference (see the test file docstring). Decisions made while doing so:
+- A road chosen early (while still driving towards the junction) is re-checked when the car leaves. If a track
+  event closed or priced it out meanwhile, the recommended road is taken and the race screen says "Your chosen
+  road is no longer available: the recommended road was taken." for 2.5 s.
+- Fuel station panel: "recommended 0" means the refuel DP needs no stop here. `R` / "Recommended" then buys nothing
+  and says so (it used to buy 1 unit and cost a 3 s stop). `F` / "Fill up" with less than one unit of room
+  ("max 0") is refused with "Cannot buy fuel here." (the engine alone would accept a fractional top-up).
+- The station panel header is "Station: max M, recommended R" (the longer wording overflowed the column).
+  While the buy block is shown the Controls panel grows by three lines so the road options below it
+  (up to four) are all listed; the event feed shrinks to make room.
+- Design choices, not bugs: the nitro boost timer runs while the car stands at a junction waiting for the
+  player (the 3 s decision grace), and Space during the countdown spends a charge whose boost then starts
+  with the race; in a results modal keys other than Esc are ignored (only its buttons act).
+- With 10 racers (9 opponents) the Running order panel pushes the event feed to the 40 px minimum; it stays
+  inside the window except while a station buy block is open, when it is pushed off the bottom edge.
+- Real-window check: `DISPLAY=:0 timeout 8 .venv/bin/python main.py` opens a 1280x720 SCALED window and runs
+  without stderr output. This machine has no xdotool, xte, ydotool or python-xlib, so keystrokes and clicks
+  could not be injected into the real window; `xwd -name "Smart Racing Championship"` captured it
+  (docs/screenshots/e2e/real_window_menu.png, striped because the raw X dump is decoded naively).
