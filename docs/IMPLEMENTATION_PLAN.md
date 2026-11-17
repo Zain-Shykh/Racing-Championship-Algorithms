@@ -16,7 +16,7 @@ phase is committed and pushed to `origin/main`.
 | 5 | GUI part 1: app shell, menu, explorer, racing screen | 4 | done |
 | 6 | GUI part 2: algorithm lab, dashboard, generator view | 5 | done |
 | 7 | Five experimental studies | 4 | done |
-| 8 | Report, README, packaging and final QA | 6, 7 | pending |
+| 8 | Report, README, packaging and final QA | 6, 7 | done |
 
 ---
 
