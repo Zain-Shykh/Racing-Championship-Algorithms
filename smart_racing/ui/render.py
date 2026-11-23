@@ -13,11 +13,12 @@ from smart_racing.core.graph import (CHECKPOINT, DEAD_END, FINISH, FUEL_STATION,
                                      NITRO_PICKUP, START, Edge, TrackGraph)
 from smart_racing.ui.widgets import BAD, BG, BORDER, DIM, GOOD, PANEL, TEXT, WARN, blend, font, text
 
-DIFF_COLORS = {1: (70, 190, 100), 2: (165, 205, 70), 3: (245, 190, 50), 4: (245, 120, 45), 5: (215, 60, 60)}
-CAR_COLORS = [(255, 255, 255), (255, 150, 40), (235, 90, 235), (110, 230, 90), (255, 235, 70),
-              (90, 190, 255), (255, 110, 110), (170, 140, 255), (90, 235, 200), (230, 170, 120)]
+DIFF_COLORS = {1: (70, 205, 120), 2: (165, 215, 70), 3: (250, 195, 50), 4: (245, 120, 45), 5: (215, 60, 60)}
+CAR_COLORS = [(255, 255, 255), (251, 146, 60), (244, 114, 182), (74, 222, 128), (250, 204, 21),
+              (56, 189, 248), (248, 113, 113), (192, 132, 252), (45, 212, 191), (251, 191, 36)]
 HALO = {"oil": (160, 100, 235), "speed": (255, 205, 40)}
-ROAD_BG = (12, 15, 22)
+ROAD_BG = (10, 14, 22)
+ASPHALT = (20, 27, 40)
 
 
 @dataclass
@@ -44,33 +45,33 @@ def draw_vertex_icon(surf, vtype: str, center, r: int = 13, order: int | None = 
         text(surf, s, (cx, cy), 21 if r >= 12 else 17, color if active else ink, "center", bold=True)
 
     if vtype == INTERSECTION:
-        pygame.draw.circle(surf, dim((150, 158, 175)), (cx, cy), max(5, r // 2))
-        pygame.draw.circle(surf, dim((30, 36, 48)), (cx, cy), max(5, r // 2), 2)
+        pygame.draw.circle(surf, dim((100, 115, 140)), (cx, cy), max(5, r // 2))
+        pygame.draw.circle(surf, dim((25, 35, 50)), (cx, cy), max(5, r // 2), 2)
     elif vtype == FINISH:
         box = pygame.Rect(cx - r, cy - r, 2 * r, 2 * r)
         n = 4
         for i in range(n):
             for j in range(n):
-                shade = (240, 240, 240) if (i + j) % 2 == 0 else (20, 20, 20)
+                shade = (245, 245, 250) if (i + j) % 2 == 0 else (25, 30, 42)
                 pygame.draw.rect(surf, dim(shade), (box.x + i * box.w // n, box.y + j * box.h // n,
                                                    box.w // n + 1, box.h // n + 1))
         pygame.draw.rect(surf, dim((255, 255, 255)), box, 2)
     elif vtype == FUEL_STATION:
-        pygame.draw.rect(surf, dim((220, 55, 55)), (cx - r, cy - r, 2 * r, 2 * r), border_radius=5)
-        pygame.draw.rect(surf, dim((255, 200, 200)), (cx - r, cy - r, 2 * r, 2 * r), 2, border_radius=5)
+        pygame.draw.rect(surf, dim((239, 68, 68)), (cx - r, cy - r, 2 * r, 2 * r), border_radius=5)
+        pygame.draw.rect(surf, dim((254, 202, 202)), (cx - r, cy - r, 2 * r, 2 * r), 2, border_radius=5)
         label("F")
     elif vtype == NITRO_PICKUP:
         pts = [(cx, cy - r - 3), (cx + r + 3, cy), (cx, cy + r + 3), (cx - r - 3, cy)]
-        pygame.draw.polygon(surf, dim((40, 120, 235)), pts)
-        pygame.draw.polygon(surf, dim((190, 220, 255)), pts, 2)
+        pygame.draw.polygon(surf, dim((56, 189, 248)), pts)
+        pygame.draw.polygon(surf, dim((224, 242, 254)), pts, 2)
         label("N")
     else:
-        fill, rim, mark = {START: ((40, 170, 80), (200, 255, 215), "S"),
-                           CHECKPOINT: ((245, 195, 40), (255, 245, 190), str(order or "")),
-                           DEAD_END: ((150, 70, 190), (225, 190, 250), "D")}[vtype]
+        fill, rim, mark = {START: ((46, 204, 113), (220, 252, 231), "S"),
+                           CHECKPOINT: ((251, 191, 36), (254, 240, 138), str(order or "")),
+                           DEAD_END: ((168, 85, 247), (243, 232, 255), "D")}[vtype]
         pygame.draw.circle(surf, dim(fill), (cx, cy), r)
         pygame.draw.circle(surf, dim(rim), (cx, cy), r, 2)
-        label(mark, (20, 20, 20) if vtype == CHECKPOINT else (255, 255, 255))
+        label(mark, (15, 20, 28) if vtype == CHECKPOINT else (255, 255, 255))
     if not active:
         pygame.draw.line(surf, (110, 118, 135), (cx - r, cy + r), (cx + r, cy - r), 2)
 
@@ -87,10 +88,10 @@ def _dashed(surf, color, a, b, width, dash=11, gap=7) -> None:
         d += dash + gap
 
 
-def _arrow(surf, color, mid, ux, uy, size=8) -> None:
+def _arrow(surf, color, mid, ux, uy, size=9) -> None:
     tip = (mid[0] + ux * size, mid[1] + uy * size)
-    left = (mid[0] - ux * size - uy * size * 0.8, mid[1] - uy * size + ux * size * 0.8)
-    right = (mid[0] - ux * size + uy * size * 0.8, mid[1] - uy * size - ux * size * 0.8)
+    left = (mid[0] - ux * size - uy * size * 0.85, mid[1] - uy * size + ux * size * 0.85)
+    right = (mid[0] - ux * size + uy * size * 0.85, mid[1] - uy * size - ux * size * 0.85)
     pygame.draw.polygon(surf, ROAD_BG, [tip, left, right])
     pygame.draw.polygon(surf, color, [tip, left, right], 2)
 
@@ -173,13 +174,16 @@ class GraphView:
         if pulse > 0:
             pygame.draw.line(surf, blend(BG, (255, 255, 255), min(1.0, pulse)), a, b, w + 14)
         if e.blocked:
+            pygame.draw.line(surf, (35, 20, 24), a, b, w + 4)
             pygame.draw.line(surf, (70, 72, 84), a, b, 6)
             return
+        # Asphalt road foundation casing for clean visual track depth
+        pygame.draw.line(surf, ASPHALT, a, b, w + 6)
         for kind in e.effects.values():
             pygame.draw.line(surf, HALO[kind], a, b, w + 8)
         color = DIFF_COLORS[e.effective_difficulty]
         if e.is_shortcut:
-            pygame.draw.line(surf, (40, 46, 60), a, b, w + 2)
+            pygame.draw.line(surf, (30, 42, 60), a, b, w + 2)
             _dashed(surf, color, a, b, w)
         else:
             pygame.draw.line(surf, color, a, b, w)
@@ -201,7 +205,7 @@ class GraphView:
             pygame.draw.line(surf, BAD, (mid[0] - s, mid[1] - s), (mid[0] + s, mid[1] + s), 5)
             pygame.draw.line(surf, BAD, (mid[0] - s, mid[1] + s), (mid[0] + s, mid[1] - s), 5)
         elif e.directed:
-            _arrow(surf, (235, 240, 250), mid, ux, uy)
+            _arrow(surf, (245, 248, 255), mid, ux, uy)
         elif e.effects:
             pygame.draw.circle(surf, ROAD_BG, mid, 9)
             text(surf, "!", mid, 22, HALO[next(iter(e.effects.values()))], "center", bold=True)
@@ -216,19 +220,27 @@ class GraphView:
         c, s = math.cos(heading), math.sin(heading)
 
         def pts(shape):
-            return [(pos[0] + 1.3 * (x * c - y * s), pos[1] + 1.3 * (x * s + y * c)) for x, y in shape]
+            return [(pos[0] + 1.35 * (x * c - y * s), pos[1] + 1.35 * (x * s + y * c)) for x, y in shape]
 
         if faded:
             color = blend(color, BG, 0.6)
         if boost:
-            pygame.draw.polygon(surf, (255, 140, 30), pts([(-9, -3), (-20, 0), (-9, 3)]))
-        body = pts([(11, 0), (6, -5.5), (-9, -5.5), (-9, 5.5), (6, 5.5)])
+            # Dual-stage flame exhaust for nitro boost
+            pygame.draw.polygon(surf, (56, 189, 248), pts([(-9, -2), (-24, 0), (-9, 2)]))
+            pygame.draw.polygon(surf, (255, 200, 50), pts([(-9, -1.2), (-15, 0), (-9, 1.2)]))
+        body = pts([(12, 0), (7, -6), (-9, -6), (-9, 6), (7, 6)])
         pygame.draw.polygon(surf, color, body)
-        pygame.draw.polygon(surf, (255, 255, 255) if player else (15, 15, 20), body, 2)
-        pygame.draw.polygon(surf, (25, 35, 55), pts([(4, -3.5), (-2, -3.5), (-2, 3.5), (4, 3.5)]))
+        pygame.draw.polygon(surf, (255, 255, 255) if player else (20, 25, 35), body, 2)
+        # Cockpit windshield
+        pygame.draw.polygon(surf, (15, 25, 45), pts([(5, -3.5), (-3, -3.5), (-3, 3.5), (5, 3.5)]))
+        # Rear spoiler
+        pygame.draw.line(surf, (255, 255, 255) if player else (40, 50, 70),
+                         pts([(-9, -6.5)])[0], pts([(-9, 6.5)])[0], 2)
         if player:
             x, y = int(pos[0]), int(pos[1]) - 22
-            pygame.draw.polygon(surf, WARN, [(x - 6, y - 5), (x + 6, y - 5), (x, y + 3)])
+            # Glowing double chevron for player indicator
+            pygame.draw.polygon(surf, WARN, [(x - 6, y - 6), (x + 6, y - 6), (x, y + 2)])
+            pygame.draw.polygon(surf, (255, 255, 255), [(x - 4, y - 5), (x + 4, y - 5), (x, y)])
         if label:
             text(surf, label, (pos[0], pos[1] + 16), 17, color, "center", bold=True)
 

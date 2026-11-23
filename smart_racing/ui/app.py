@@ -135,6 +135,8 @@ class App:
     def draw(self) -> None:
         if self.screen is not None:
             self._guard("draw", self.screen.draw, self.surface)
+            # Modern cyber neon accent bar at the very top of the window
+            pygame.draw.line(self.surface, (56, 189, 248), (0, 0), (W, 0), 2)
         if self.error:
             msg = self.error[0]
             bar = pygame.Rect(0, H - 34, W, 34)
