@@ -36,13 +36,25 @@ class MainMenu(Screen):
                ("Algorithm Lab", "lab"), ("Championship Dashboard", "dashboard"), ("Track Generator", "generator"),
                ("Instructions", "instructions"), ("Settings", "settings")]
 
+    ENTRY_COLORS = {
+        "championship": (24, 76, 52),
+        "quick": (20, 68, 102),
+        "explorer": (32, 46, 74),
+        "lab": (46, 38, 76),
+        "dashboard": (52, 46, 30),
+        "generator": (28, 54, 70),
+        "instructions": (28, 38, 58),
+        "settings": (28, 38, 58),
+    }
+
     def __init__(self, app, **kw) -> None:
         super().__init__(app)
         for i, (label, target) in enumerate(self.ENTRIES):
-            self.widgets.append(Button((80, 180 + i * 54, 380, 46), label, lambda t=target: self.open(t)))
-        self.widgets.append(Button((80, 180 + len(self.ENTRIES) * 54, 380, 46), "Quit", app.quit, color=(110, 40, 48)))
-        self.panel = Panel((520, 150, 700, 530))
-        self.preview = Preview((530, 160, 680, 470))
+            c = self.ENTRY_COLORS.get(target)
+            self.widgets.append(Button((80, 180 + i * 54, 380, 46), label, lambda t=target: self.open(t), color=c))
+        self.widgets.append(Button((80, 180 + len(self.ENTRIES) * 54, 380, 46), "Quit", app.quit, color=(120, 36, 45)))
+        self.panel = Panel((520, 145, 700, 535), "Track Radar")
+        self.preview = Preview((530, 175, 680, 430))
         self.t = 0.0
 
     def open(self, target: str) -> None:
@@ -60,15 +72,27 @@ class MainMenu(Screen):
 
     def draw(self, surf) -> None:
         super().draw(surf)
+        # Category badge pill
+        badge = pygame.Rect(80, 24, 216, 22)
+        pygame.draw.rect(surf, (16, 36, 60), badge, border_radius=4)
+        pygame.draw.rect(surf, ACCENT, badge, 1, border_radius=4)
+        text(surf, "FAST ALGORITHMIC RACING", (badge.centerx, badge.centery), 16, ACCENT, "center", bold=True)
+
         text(surf, "SMART RACING", (80, 56), 66, TEXT, bold=True)
         text(surf, "CHAMPIONSHIP", (80, 108), 44, ACCENT, bold=True)
-        text(surf, "12 hand-written algorithms power the game.",
-             (80, 146), 21, DIM)
+        text(surf, "12 hand-written algorithms power the game.", (80, 146), 21, DIM)
+
         names = list_circuits()
         name = names[int(self.t / 4) % len(names)]
         self.panel.draw(surf)
         self.preview.draw(surf, name)
-        text(surf, nice(name), (self.panel.rect.centerx, self.panel.rect.bottom - 30), 30, TEXT, "center", bold=True)
+
+        # Bottom telemetry pill card inside preview panel
+        card = pygame.Rect(self.panel.rect.x + 16, self.panel.rect.bottom - 54, self.panel.rect.w - 32, 42)
+        pygame.draw.rect(surf, (14, 20, 32), card, border_radius=6)
+        pygame.draw.rect(surf, BORDER, card, 1, border_radius=6)
+        text(surf, nice(name), (card.x + 16, card.centery), 24, (255, 255, 255), "midleft", bold=True)
+        text(surf, "10 Checkpoints  •  Shortcuts  •  Events", (card.right - 16, card.centery), 18, ACCENT, "midright")
 
 
 class QuickRaceSetup(Screen):
